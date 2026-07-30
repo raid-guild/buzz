@@ -13,10 +13,11 @@
 //! This module reaches the underlying `webkit2gtk::WebView` via
 //! [`tauri::Webview::with_webview`], enables media-stream, and installs a
 //! `permission-request` handler that is **deny-by-default**: a `UserMedia`
-//! request is allowed only when it comes from a trusted app origin and asks for
-//! an audio and/or video device. Tauri does not restrict navigation by default,
-//! so without the origin check any document that ended up in this webview would
-//! inherit silent mic/camera access for the process lifetime.
+//! request is allowed only when the top-level document has a trusted app origin
+//! and asks for an audio and/or video device. Camera and microphone both have a
+//! Permissions Policy default allowlist of `self`, so WebKit separately rejects
+//! cross-origin frames unless the trusted app explicitly delegates access; Buzz
+//! does not embed or delegate media access to frames.
 //!
 //! Buzz's AppImage pins `GDK_BACKEND=x11` (see [`crate::webkit_rendering`]),
 //! which is the backend WebKitGTK media capture is reliable on.
@@ -30,15 +31,18 @@ const PROD_ORIGIN: &str = "tauri://localhost";
 const DEV_ORIGIN: &str = "http://localhost:1420";
 
 /// Whether `uri` (the webview's current document URI) is a trusted app origin
-/// allowed to use mic/camera. Matches the origin exactly or as a path prefix so
-/// `tauri://localhost.evil.com` and `http://localhost:14200` do not slip
-/// through. Pure and platform-independent so it can be unit-tested everywhere.
+/// allowed to use mic/camera. Matches the origin exactly or when followed by a
+/// URL path, query, or fragment delimiter, so `tauri://localhost.evil.com` and
+/// `http://localhost:14200` do not slip through. Pure and platform-independent
+/// so it can be unit-tested everywhere.
 fn is_trusted_media_origin(uri: &str) -> bool {
     fn matches(uri: &str, origin: &str) -> bool {
         uri == origin
             || uri
                 .strip_prefix(origin)
-                .is_some_and(|rest| rest.starts_with('/'))
+                .is_some_and(|rest| {
+                    rest.starts_with('/') || rest.starts_with('?') || rest.starts_with('#')
+                })
     }
 
     if matches(uri, PROD_ORIGIN) {
@@ -112,6 +116,8 @@ mod tests {
         assert!(is_trusted_media_origin(
             "tauri://localhost/channels/general"
         ));
+        assert!(is_trusted_media_origin("tauri://localhost?channel=general"));
+        assert!(is_trusted_media_origin("tauri://localhost#general"));
     }
 
     #[test]
@@ -128,6 +134,8 @@ mod tests {
     fn allows_dev_origin_in_debug_only() {
         assert!(is_trusted_media_origin("http://localhost:1420"));
         assert!(is_trusted_media_origin("http://localhost:1420/"));
+        assert!(is_trusted_media_origin("http://localhost:1420?debug=1"));
+        assert!(is_trusted_media_origin("http://localhost:1420#debug"));
         // A different localhost port is still untrusted.
         assert!(!is_trusted_media_origin("http://localhost:14200"));
         assert!(!is_trusted_media_origin("http://localhost:3000"));
