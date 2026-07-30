@@ -38,11 +38,9 @@ const DEV_ORIGIN: &str = "http://localhost:1420";
 fn is_trusted_media_origin(uri: &str) -> bool {
     fn matches(uri: &str, origin: &str) -> bool {
         uri == origin
-            || uri
-                .strip_prefix(origin)
-                .is_some_and(|rest| {
-                    rest.starts_with('/') || rest.starts_with('?') || rest.starts_with('#')
-                })
+            || uri.strip_prefix(origin).is_some_and(|rest| {
+                rest.starts_with('/') || rest.starts_with('?') || rest.starts_with('#')
+            })
     }
 
     if matches(uri, PROD_ORIGIN) {
