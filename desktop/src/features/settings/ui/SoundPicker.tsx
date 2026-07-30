@@ -4,6 +4,7 @@ import { ChevronDown, Pause, Play } from "lucide-react";
 import {
   playNotificationSound,
   SOUND_NAMES,
+  type NotificationSoundPlayback,
   type SoundName,
 } from "@/features/notifications/lib/sound";
 import { cn } from "@/shared/lib/cn";
@@ -64,21 +65,20 @@ export function SoundPicker({
 }) {
   const items = sortedSounds(recommended);
   const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playbackRef = useRef<NotificationSoundPlayback | null>(null);
 
   function togglePreview() {
     if (isPlaying) {
-      audioRef.current?.pause();
+      playbackRef.current?.stop();
       setIsPlaying(false);
       return;
     }
-    const audio = playNotificationSound(value);
-    if (!audio) return;
-    audioRef.current = audio;
+    const playback = playNotificationSound(value);
+    playbackRef.current = playback;
     setIsPlaying(true);
-    const stop = () => setIsPlaying(false);
-    audio.addEventListener("ended", stop, { once: true });
-    audio.addEventListener("pause", stop, { once: true });
+    void playback.finished.finally(() => {
+      if (playbackRef.current === playback) setIsPlaying(false);
+    });
   }
 
   return (
