@@ -154,15 +154,12 @@ jobs:
           key: mesh-llama-${{ runner.os }}-metal-${{ steps.mesh_rev.outputs.rev }}
       - name: Build mesh llama native libraries
         if: steps.llama_cache.outputs.cache-hit != 'true'
-        env:
-          MESH_REV_SHORT: ${{ steps.mesh_rev.outputs.short }}
         run: |
           set -euo pipefail
           cargo fetch --manifest-path desktop/src-tauri/Cargo.toml
-          SHORT="$MESH_REV_SHORT"
-          MESH_ROOT=$(find "${CARGO_HOME:-$HOME/.cargo}/git/checkouts" -path "*/$SHORT" -type d -name "$SHORT" | head -1)
+          MESH_ROOT=$(cargo metadata --manifest-path desktop/src-tauri/Cargo.toml --features mesh-llm --format-version 1 | python3 -c 'import json,os,sys; data=json.load(sys.stdin); manifest=next(p["manifest_path"] for p in data["packages"] if p["name"] == "mesh-llm-sdk"); print(os.path.abspath(os.path.join(os.path.dirname(manifest), "..", "..")))')
           if [[ -z "$MESH_ROOT" ]]; then
-            echo "::error::mesh-llm checkout for $SHORT not found after cargo fetch"
+            echo "::error::could not resolve mesh-llm checkout through cargo metadata"
             exit 1
           fi
           export LLAMA_STAGE_BACKEND=metal
@@ -715,6 +712,7 @@ jobs:
 
   release-windows:
     name: Release Windows
+    if: github.repository == 'block/buzz'
     runs-on: windows-latest
     needs: setup
     timeout-minutes: 60
@@ -852,6 +850,7 @@ jobs:
     # Only the tag-bound setup path can reach this job.
     if: |
       always() &&
+      github.repository == 'block/buzz' &&
       needs.setup.result == 'success' &&
       github.ref == format('refs/tags/v{0}', needs.setup.outputs.version)
     runs-on: ubuntu-latest

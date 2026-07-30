@@ -1,5 +1,11 @@
 <h1 align="center">Buzz 🐝</h1>
 
+> [!NOTE]
+> This is RaidGuild's community fork of
+> [`block/buzz`](https://github.com/block/buzz). The initial customization
+> scope is the desktop client; relay and mobile protocol compatibility remain
+> explicit release requirements. See [COMMUNITY_BUILD.md](COMMUNITY_BUILD.md).
+
 <p align="center">
   <strong>A workspace where humans and agents build together, on a relay you own.</strong>
 </p>
