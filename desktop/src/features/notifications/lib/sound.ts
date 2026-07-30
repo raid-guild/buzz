@@ -156,8 +156,11 @@ export function playNotificationSound(
           console.warn(`Unable to play notification sound "${name}"`, error);
         },
       ),
-      // Notification clips are short and the native command owns its player.
-      stop: () => {},
+      stop: () => {
+        void invoke<void>("stop_notification_sound").catch((error) => {
+          console.warn(`Unable to stop notification sound "${name}"`, error);
+        });
+      },
     };
   }
 

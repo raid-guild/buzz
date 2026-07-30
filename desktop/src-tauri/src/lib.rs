@@ -19,9 +19,9 @@ mod model_tests;
 mod models;
 mod native_websocket;
 mod nostr_bind;
+pub mod nostr_convert;
 #[cfg(target_os = "linux")]
 mod notification_sound;
-pub mod nostr_convert;
 mod prevent_sleep;
 mod ptt_shortcut;
 mod relay;
@@ -58,10 +58,10 @@ use managed_agents::{
     restart_managed_agent_runtime, start_managed_agent_runtime, stop_managed_agent_runtime,
     try_regenerate_nest,
 };
-#[cfg(target_os = "linux")]
-use notification_sound::play_notification_sound;
 #[cfg(not(feature = "mesh-llm"))]
 use mesh_llm_stubs::*;
+#[cfg(target_os = "linux")]
+use notification_sound::{play_notification_sound, stop_notification_sound};
 #[cfg(all(feature = "mesh-llm", target_os = "macos"))]
 use shutdown::{hard_exit_after_mesh_shutdown, relaunch_after_mesh_shutdown};
 use shutdown::{is_restart_request, shut_down_app};
@@ -351,6 +351,9 @@ pub fn run() {
 
     #[cfg(not(buzz_updater_enabled))]
     let builder = builder;
+
+    #[cfg(target_os = "linux")]
+    let builder = builder.manage(notification_sound::NotificationSoundState::default());
 
     let app = builder
         .register_asynchronous_uri_scheme_protocol("buzz-media", |ctx, request, responder| {
@@ -881,6 +884,8 @@ pub fn run() {
             get_audio_output_device,
             #[cfg(target_os = "linux")]
             play_notification_sound,
+            #[cfg(target_os = "linux")]
+            stop_notification_sound,
             start_pairing,
             confirm_pairing_sas,
             cancel_pairing,
