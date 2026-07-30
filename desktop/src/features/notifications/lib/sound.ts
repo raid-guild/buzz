@@ -6,6 +6,8 @@ import {
   KIND_JOB_RESULT,
 } from "@/shared/constants/kinds";
 import type { FeedItemCategory } from "@/shared/api/types";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { isLinuxPlatform } from "@/shared/lib/platform";
 
 export const SOUND_NAMES = [
   "bong",
@@ -130,6 +132,11 @@ export function slotForFeedKind(
 
 const cache = new Map<SoundName, HTMLAudioElement>();
 
+export type NotificationSoundPlayback = {
+  finished: Promise<void>;
+  stop: () => void;
+};
+
 function getAudio(name: SoundName): HTMLAudioElement {
   let audio = cache.get(name);
   if (!audio) {
@@ -141,16 +148,40 @@ function getAudio(name: SoundName): HTMLAudioElement {
 
 export function playNotificationSound(
   name: SoundName,
-): HTMLAudioElement | null {
+): NotificationSoundPlayback {
+  if (isTauri() && isLinuxPlatform()) {
+    return {
+      finished: invoke<void>("play_notification_sound", { name }).catch(
+        (error) => {
+          console.warn(`Unable to play notification sound "${name}"`, error);
+        },
+      ),
+      // Notification clips are short and the native command owns its player.
+      stop: () => {},
+    };
+  }
+
   try {
     const audio = getAudio(name);
     audio.currentTime = 0;
-    audio.play().catch(() => {
-      // Best-effort — user may not have interacted with the page yet.
+    const finished = new Promise<void>((resolve) => {
+      const finish = () => {
+        audio.removeEventListener("ended", finish);
+        audio.removeEventListener("error", finish);
+        audio.removeEventListener("pause", finish);
+        resolve();
+      };
+      audio.addEventListener("ended", finish, { once: true });
+      audio.addEventListener("error", finish, { once: true });
+      audio.addEventListener("pause", finish, { once: true });
+      void audio.play().catch((error) => {
+        console.warn(`Unable to play notification sound "${name}"`, error);
+        finish();
+      });
     });
-    return audio;
-  } catch {
-    // Best-effort only.
-    return null;
+    return { finished, stop: () => audio.pause() };
+  } catch (error) {
+    console.warn(`Unable to prepare notification sound "${name}"`, error);
+    return { finished: Promise.resolve(), stop: () => {} };
   }
 }

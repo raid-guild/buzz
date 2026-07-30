@@ -19,6 +19,8 @@ mod model_tests;
 mod models;
 mod native_websocket;
 mod nostr_bind;
+#[cfg(target_os = "linux")]
+mod notification_sound;
 pub mod nostr_convert;
 mod prevent_sleep;
 mod ptt_shortcut;
@@ -56,6 +58,8 @@ use managed_agents::{
     restart_managed_agent_runtime, start_managed_agent_runtime, stop_managed_agent_runtime,
     try_regenerate_nest,
 };
+#[cfg(target_os = "linux")]
+use notification_sound::play_notification_sound;
 #[cfg(not(feature = "mesh-llm"))]
 use mesh_llm_stubs::*;
 #[cfg(all(feature = "mesh-llm", target_os = "macos"))]
@@ -875,6 +879,8 @@ pub fn run() {
             list_audio_output_devices,
             set_audio_output_device,
             get_audio_output_device,
+            #[cfg(target_os = "linux")]
+            play_notification_sound,
             start_pairing,
             confirm_pairing_sas,
             cancel_pairing,
