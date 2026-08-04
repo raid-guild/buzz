@@ -75,7 +75,8 @@ pub async fn play_notification_sound(
 ) -> Result<(), String> {
     let bytes = sound_bytes(&name).ok_or_else(|| format!("unknown notification sound: {name}"))?;
     let output_device = state
-        .audio_output_device
+        .huddle_audio
+        .output_device
         .lock()
         .map_err(|e| e.to_string())?
         .clone();
