@@ -13,28 +13,32 @@
 //! This module reaches the underlying `webkit2gtk::WebView` via
 //! [`tauri::Webview::with_webview`], enables media-stream, and installs a
 //! `permission-request` handler that is **deny-by-default**: a `UserMedia`
-//! request is allowed only when the top-level document has a trusted app origin
-//! and asks for an audio and/or video device. Camera and microphone both have a
-//! Permissions Policy default allowlist of `self`, so WebKit separately rejects
-//! cross-origin frames unless the trusted app explicitly delegates access; Buzz
-//! does not embed or delegate media access to frames.
+//! request is allowed only when it comes from a trusted app origin and asks for
+//! an audio and/or video device. Tauri does not restrict navigation by default,
+//! so without the origin check any document that ended up in this webview would
+//! inherit silent mic/camera access for the process lifetime.
 //!
 //! Buzz's AppImage pins `GDK_BACKEND=x11` (see [`crate::webkit_rendering`]),
 //! which is the backend WebKitGTK media capture is reliable on.
 
 /// The origin Tauri serves the packaged app from on Linux.
+/// Consumed only by linux-gated [`enable_media_capture`]; kept compiling on all
+/// platforms so the unit tests run everywhere.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 const PROD_ORIGIN: &str = "tauri://localhost";
 
 /// The Vite dev-server origin (`devUrl` in `tauri.conf.json`, `strictPort`
 /// 1420 in `vite.config.ts`). Only trusted in debug builds.
 #[cfg(debug_assertions)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 const DEV_ORIGIN: &str = "http://localhost:1420";
 
 /// Whether `uri` (the webview's current document URI) is a trusted app origin
 /// allowed to use mic/camera. Matches the origin exactly or when followed by a
-/// URL path, query, or fragment delimiter, so `tauri://localhost.evil.com` and
-/// `http://localhost:14200` do not slip through. Pure and platform-independent
-/// so it can be unit-tested everywhere.
+/// URL path, query, or fragment delimiter, so
+/// `tauri://localhost.evil.com` and `http://localhost:14200` do not slip
+/// through. Pure and platform-independent so it can be unit-tested everywhere.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn is_trusted_media_origin(uri: &str) -> bool {
     fn matches(uri: &str, origin: &str) -> bool {
         uri == origin
