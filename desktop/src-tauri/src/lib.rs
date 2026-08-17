@@ -51,8 +51,11 @@ use app_state::{build_app_state, resolve_persisted_identity, AppState};
 use builderlab::*;
 use commands::*;
 use deep_link::{
-    acknowledge_pending_community_deep_link, handle_deep_link_url,
-    take_pending_community_deep_link, PendingCommunityDeepLinks,
+    acknowledge_pending_community_deep_link, acknowledge_pending_entity_deep_link,
+    acknowledge_pending_navigation_deep_link, clear_pending_navigation_deep_links,
+    handle_deep_link_url, take_pending_community_deep_link, take_pending_entity_deep_link,
+    take_pending_navigation_deep_link, PendingCommunityDeepLinks, PendingEntityDeepLinks,
+    PendingNavigationDeepLinks,
 };
 use huddle::audio_output::{
     get_audio_output_device, list_audio_output_devices, set_audio_output_device,
@@ -194,8 +197,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init());
 
     // The global-shortcut plugin is omitted from test builds: linking it into
-    // the lib-test binary makes it fail to load on Windows
-    // (STATUS_ENTRYPOINT_NOT_FOUND) before any test runs.
+    // the lib-test binary makes it fail to load on Windows (STATUS_ENTRYPOINT_NOT_FOUND) before any test runs.
     #[cfg(not(test))]
     let builder = builder.plugin({
         use tauri_plugin_global_shortcut::ShortcutState;
@@ -245,13 +247,7 @@ pub fn run() {
                                     .store(true, std::sync::atomic::Ordering::Release);
                             }
                         }
-                        // Emit ptt-state=true to the frontend.
-                        // The React side plays the press audio cue on this event
-                        // (Web Audio API via HuddleContext). Rust-side rodio audio
-                        // was considered but rejected: the rodio OutputStream must
-                        // outlive the handler and sharing it across the shortcut
-                        // closure adds lifecycle complexity for marginal gain.
-                        // The React implementation is sufficient and simpler.
+                        // React plays the press cue, avoiding a shared long-lived rodio stream.
                         let _ = app.emit("ptt-state", true);
                     }
                     ShortcutState::Released => {
@@ -291,7 +287,6 @@ pub fn run() {
     } else {
         builder.plugin(tauri_plugin_updater::Builder::new().build())
     };
-
     let builder = app_menu::install(builder);
     #[cfg(target_os = "linux")]
     let builder = builder.manage(notification_sound::NotificationSoundState::default());
@@ -307,6 +302,8 @@ pub fn run() {
         .manage(build_app_state())
         .manage(ClipboardState::new())
         .manage(PendingCommunityDeepLinks::default())
+        .manage(PendingNavigationDeepLinks::default())
+        .manage(PendingEntityDeepLinks::default())
         .manage(BuilderlabSession::default())
         .manage(BuilderlabLogin::default())
         .manage(commands::pairing::PairingHandle::new())
@@ -518,15 +515,7 @@ pub fn run() {
             // and on cold start. The single-instance plugin handles forwarding
             // from duplicate launches on Windows/Linux.
             #[cfg(desktop)]
-            {
-                use tauri_plugin_deep_link::DeepLinkExt;
-                let dl_handle = app.handle().clone();
-                app.deep_link().on_open_url(move |event| {
-                    for url in event.urls() {
-                        handle_deep_link_url(&dl_handle, url.as_str());
-                    }
-                });
-            }
+            deep_link::install_deep_link_handlers(app);
 
             // Defer launch-time agent restoration until `apply_workspace` has
             // installed the active workspace relay and identity. Starting here
@@ -619,6 +608,11 @@ pub fn run() {
             terminal_runtime::terminal_focus,
             take_pending_community_deep_link,
             acknowledge_pending_community_deep_link,
+            take_pending_navigation_deep_link,
+            acknowledge_pending_navigation_deep_link,
+            clear_pending_navigation_deep_links,
+            take_pending_entity_deep_link,
+            acknowledge_pending_entity_deep_link,
             start_builderlab_login,
             cancel_builderlab_login,
             get_builderlab_auth,
@@ -659,8 +653,11 @@ pub fn run() {
             delete_project_remote_branch,
             push_project_local_repository,
             pull_project_local_repository,
+            publish_project_owner_announcement,
             sign_project_pull_request_status,
             sign_project_pull_request_review_request,
+            sign_project_issue_assignment,
+            sign_project_issue_unassignment,
             publish_project_pull_request_merged_status,
             merge_project_pull_request,
             open_project_terminal,
@@ -740,6 +737,7 @@ pub fn run() {
             upload_media_bytes,
             upload_media_bytes_raw,
             cancel_media_upload,
+            release_media_upload,
             download_image,
             save_png_data_url,
             download_file,
@@ -911,6 +909,7 @@ pub fn run() {
             archive::read_archived_observer_events_for_channel,
             archive::index_observer_channel_id,
             archive::read_unindexed_observer_rows,
+            archive::get_agent_usage_series,
             is_auto_update_supported,
             set_window_vibrancy,
             #[cfg(target_os = "macos")]
